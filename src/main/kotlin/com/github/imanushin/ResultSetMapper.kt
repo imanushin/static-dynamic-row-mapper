@@ -1,41 +1,118 @@
 package com.github.imanushin
 
+import com.github.imanushin.model.database.base.DoubleMappingValuesAnnotation
+import com.github.imanushin.model.database.base.SingleMappingValueAnnotation
+import mu.KLogging
 import org.springframework.jdbc.core.ResultSetExtractor
 import org.springframework.stereotype.Service
 import java.sql.ResultSet
+import kotlin.reflect.KClass
+import kotlin.reflect.KParameter
 
 interface ResultSetMapper<TMappingType> : ResultSetExtractor<List<TMappingType>>
 
 interface DynamicResultSetMapperFactory {
-    fun <TMappingType> createForType(clazz: Class<TMappingType>): ResultSetMapper<TMappingType>
+    fun <TMappingType : Any> createForType(clazz: KClass<TMappingType>): ResultSetMapper<TMappingType>
 }
 
-inline fun <reified TMappingType> DynamicResultSetMapperFactory.createForType(): ResultSetMapper<TMappingType> {
-    return createForType(TMappingType::class.java)
+inline fun <reified TMappingType : Any> DynamicResultSetMapperFactory.createForType(): ResultSetMapper<TMappingType> {
+    return createForType(TMappingType::class)
 }
 
 @Service
 internal class DynamicResultSetMapperFactoryImpl(
         private val compiler: KotlinClassCompilation
 ) : DynamicResultSetMapperFactory {
-    override fun <TMappingType> createForType(clazz: Class<TMappingType>): ResultSetMapper<TMappingType> {
+    private companion object : KLogging()
+
+    override fun <TMappingType : Any> createForType(clazz: KClass<TMappingType>): ResultSetMapper<TMappingType> {
         val sourceCode = getMapperSourceCode(clazz)
+
+        logger.debug {
+            buildString {
+                appendln("Compiling:")
+                append(sourceCode)
+            }
+        }
 
         return compiler.compile(sourceCode)
     }
 
-    private fun <TMappingType> getMapperSourceCode(clazz: Class<TMappingType>): String {
+    private fun <TMappingType : Any> getMapperSourceCode(clazz: KClass<TMappingType>): String {
         return buildString {
-            val className = clazz.name
+            val className = clazz.qualifiedName!!
             val resultSetClassName = ResultSet::class.java.name
 
-            appendln("import com.github.imanushin.ResultSetMapper")
+            val singleConstructor = clazz.constructors.single()
+            val parameters = singleConstructor.parameters
 
+            val annotations = parameters.flatMap { it.annotations.toList() }
+
+            val columnNames = annotations.flatMap { getColumnNames(it) }.toSet()
+            val columnNameToVariable = columnNames.mapIndexed { index, name -> name to "columnIndex$index" }.toMap()
+
+            appendln("import com.github.imanushin.ResultSetMapper")
             appendln("object : com.github.imanushin.ResultSetMapper<$className> {")
             appendln("   override fun extractData(rs: $resultSetClassName): List<$className> {")
-            appendln("      TODO()")
+            appendln("      val queryMetadata = rs.metaData")
+            appendln("      val queryColumnCount = queryMetadata.columnCount")
+            appendln("      val mapperColumnCount = ${columnNameToVariable.size}")
+            appendln()
+            appendln("      require(queryColumnCount == mapperColumnCount) {")
+            appendln("          val queryColumns = (0..queryColumnCount).joinToString { queryMetadata.getColumnName(it) }")
+            appendln("          \"Sql query has invalid columns: \$mapperColumnCount is expected, however \$queryColumnCount is returned. \" +")
+            appendln("              \"Query has: \$queryColumns. Mapper has: ${columnNames.joinToString()}\"")
+            appendln("      }")
+            appendln()
+            columnNameToVariable.forEach { (columnName, variableName) ->
+                appendln("      val $variableName = rs.findColumn(\"$columnName\")")
+            }
+            appendln("      val result = mutableListOf<$className>()")
+            appendln("      while (rs.next()) {")
+            parameters.forEach { parameter ->
+                fillParameterConstructor(parameter, columnNameToVariable)
+            }
+            appendln("          val rowResult = $className(")
+            appendln(
+                    parameters.joinToString("," + System.lineSeparator()) { parameter ->
+                        "              ${parameter.name} = ${parameter.name}"
+                    }
+            )
+            appendln("          )")
+            appendln("          result.add(rowResult)")
+            appendln("      }")
+            appendln("      return result")
             appendln("   }")
             appendln("}")
+        }
+    }
+
+    private fun StringBuilder.fillParameterConstructor(parameter: KParameter, columnNameToVariable: Map<String, String>) {
+        append("              val ${parameter.name} = ")
+
+        // please note: double or missing annotations aren't covered here
+        parameter.annotations.forEach { annotation ->
+            when (annotation) {
+                is DoubleMappingValuesAnnotation ->
+                    appendln("${annotation.constructionClass.qualifiedName}.getValue(" +
+                            "rs, " +
+                            "${columnNameToVariable[annotation.columnName1]}, " +
+                            "${columnNameToVariable[annotation.columnName2]})"
+                    )
+                is SingleMappingValueAnnotation ->
+                    appendln("${annotation.constructionClass.qualifiedName}.getValue(" +
+                            "rs, " +
+                            "${columnNameToVariable[annotation.columnName]})"
+                    )
+            }
+        }
+    }
+
+    private fun getColumnNames(annotation: Annotation): List<String> {
+        return when (annotation) {
+            is DoubleMappingValuesAnnotation -> listOf(annotation.columnName1, annotation.columnName2)
+            is SingleMappingValueAnnotation -> listOf(annotation.columnName)
+            else -> emptyList()
         }
     }
 }

@@ -10,9 +10,10 @@ repositories {
 
 dependencies {
     api(kotlin("stdlib-jdk8"))
+    implementation("io.github.microutils:kotlin-logging:1.7.9")
     implementation(kotlin("reflect"))
 
-    implementation("org.springframework.boot:spring-boot-starter-jdbc:2.2.6.RELEASE")
+    implementation("org.springframework.boot:spring-boot-starter-jdbc:2.2.7.RELEASE")
 
     implementation(kotlin("script-runtime"))
     implementation(kotlin("compiler-embeddable"))
