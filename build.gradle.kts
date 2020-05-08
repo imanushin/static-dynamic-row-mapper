@@ -10,7 +10,14 @@ repositories {
 
 dependencies {
     api(kotlin("stdlib-jdk8"))
-    api("org.springframework.boot:spring-boot-starter-jdbc:2.2.6.RELEASE")
+    implementation(kotlin("reflect"))
+
+    implementation("org.springframework.boot:spring-boot-starter-jdbc:2.2.6.RELEASE")
+
+    implementation(kotlin("script-runtime"))
+    implementation(kotlin("compiler-embeddable"))
+    implementation(kotlin("script-util"))
+    implementation(kotlin("scripting-compiler-embeddable"))
 
     testImplementation("io.kotest:kotest-runner-junit5:4.0.5")
 }
@@ -24,3 +31,4 @@ tasks {
         useJUnitPlatform()
     }
 }
+
