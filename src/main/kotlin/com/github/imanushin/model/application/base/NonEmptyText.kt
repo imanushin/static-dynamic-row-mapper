@@ -3,7 +3,7 @@ package com.github.imanushin.model.application.base
 abstract class NonEmptyText(val value: String) {
     init {
         require(value.isNotBlank()) {
-            "Input text is prohibited for ${this.javaClass.simpleName}. Actual value: $this"
+            "Empty text is prohibited for ${this.javaClass.simpleName}. Actual value: $this"
         }
     }
 
