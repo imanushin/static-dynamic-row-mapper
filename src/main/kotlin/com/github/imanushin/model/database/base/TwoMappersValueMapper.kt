@@ -6,10 +6,10 @@ abstract class TwoMappersValueMapper<out TResult, TParameter1, TParameter2>(
         private val parameterMapper1: SingleValueMapper<TParameter1>,
         private val parameterMapper2: SingleValueMapper<TParameter2>
 ) : DoubleValuesMapper<TResult> {
-    override fun getValue(resultSet: ResultSet, rowIndex1: Int, rowIndex2: Int): TResult {
+    override fun getValue(resultSet: ResultSet, columnIndex1: Int, columnIndex2: Int): TResult {
         return create(
-                parameterMapper1.getValue(resultSet, rowIndex1),
-                parameterMapper2.getValue(resultSet, rowIndex2)
+                parameterMapper1.getValue(resultSet, columnIndex1),
+                parameterMapper2.getValue(resultSet, columnIndex2)
         )
     }
 

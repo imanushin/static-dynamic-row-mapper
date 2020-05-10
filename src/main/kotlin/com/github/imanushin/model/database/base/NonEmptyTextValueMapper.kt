@@ -7,7 +7,7 @@ import java.sql.ResultSet
 abstract class NonEmptyTextValueMapper<out TResult : NonEmptyText>(
         private val textConstructor: NonEmptyTextConstructor<TResult>
 ) : SingleValueMapper<TResult> {
-    override fun getValue(resultSet: ResultSet, rowIndex: Int): TResult {
-        return textConstructor.create(resultSet.getString(rowIndex))
+    override fun getValue(resultSet: ResultSet, columnIndex: Int): TResult {
+        return textConstructor.create(resultSet.getString(columnIndex))
     }
 }
