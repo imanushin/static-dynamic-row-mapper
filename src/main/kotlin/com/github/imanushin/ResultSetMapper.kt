@@ -51,39 +51,50 @@ internal class DynamicResultSetMapperFactoryImpl(
             val columnNames = annotations.flatMap { getColumnNames(it) }.toSet()
             val columnNameToVariable = columnNames.mapIndexed { index, name -> name to "columnIndex$index" }.toMap()
 
-            appendln("import com.github.imanushin.ResultSetMapper")
-            appendln("object : com.github.imanushin.ResultSetMapper<$className> {")
-            appendln("   override fun extractData(rs: $resultSetClassName): List<$className> {")
-            appendln("      val queryMetadata = rs.metaData")
-            appendln("      val queryColumnCount = queryMetadata.columnCount")
-            appendln("      val mapperColumnCount = ${columnNameToVariable.size}")
-            appendln()
-            appendln("      require(queryColumnCount == mapperColumnCount) {")
-            appendln("          val queryColumns = (0..queryColumnCount).joinToString { queryMetadata.getColumnName(it) }")
-            appendln("          \"Sql query has invalid columns: \$mapperColumnCount is expected, however \$queryColumnCount is returned. \" +")
-            appendln("              \"Query has: \$queryColumns. Mapper has: ${columnNames.joinToString()}\"")
-            appendln("      }")
-            appendln()
+            appendln("""
+import com.github.imanushin.ResultSetMapper
+object : com.github.imanushin.ResultSetMapper<$className> {
+   override fun extractData(rs: $resultSetClassName): List<$className> {
+      val queryMetadata = rs.metaData
+      val queryColumnCount = queryMetadata.columnCount
+      val mapperColumnCount = ${columnNameToVariable.size}
+      require(queryColumnCount == mapperColumnCount) {
+          val queryColumns = (0..queryColumnCount).joinToString { queryMetadata.getColumnName(it) }
+          "Sql query has invalid columns: \${'$'}mapperColumnCount is expected, however \${'$'}queryColumnCount is returned. " +
+              "Query has: \${'$'}queryColumns. Mapper has: ${columnNames.joinToString()}"
+      }
+
+""")
+
             columnNameToVariable.forEach { (columnName, variableName) ->
                 appendln("      val $variableName = rs.findColumn(\"$columnName\")")
             }
-            appendln("      val result = mutableListOf<$className>()")
-            appendln("      while (rs.next()) {")
+
+            appendln("""
+       val result = mutableListOf<$className>()
+       while (rs.next()) {
+""")
+
             parameters.forEach { parameter ->
                 fillParameterConstructor(parameter, columnNameToVariable)
             }
+
+
             appendln("          val rowResult = $className(")
             appendln(
                     parameters.joinToString("," + System.lineSeparator()) { parameter ->
                         "              ${parameter.name} = ${parameter.name}"
                     }
             )
-            appendln("          )")
-            appendln("          result.add(rowResult)")
-            appendln("      }")
-            appendln("      return result")
-            appendln("   }")
-            appendln("}")
+
+            appendln("""
+          )
+          result.add(rowResult)
+      }
+      return result
+   }
+}
+""")
         }
     }
 
